@@ -62,3 +62,9 @@ JAVA_HOME=<jdk21> gradle build      # 产物在 build/libs/quietchannels-1.0.0.j
 ```
 
 骨架来自 NeoForge MDK（ModDevGradle 2.0.91），`neo_version=21.1.251`。
+
+> 构建后请校验**展开后**的元数据（模板里含 `${...}` 占位符，不能直接解析；曾因注释被误取消导致 `not a valid mod file`）：
+> ```bash
+> ./gradlew build
+> python3 -c "import zipfile,tomllib;z=zipfile.ZipFile('build/libs/quietchannels-1.0.1.jar');tomllib.loads(z.read('META-INF/neoforge.mods.toml').decode());print('TOML OK')"
+> ```
