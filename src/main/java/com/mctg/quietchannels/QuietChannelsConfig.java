@@ -19,8 +19,14 @@ public final class QuietChannelsConfig {
             .defineList("namespaces", List.of("axiom"), o -> o instanceof String);
 
     private static final ModConfigSpec.BooleanValue LOG = BUILDER
-            .comment("剔除通道时是否在日志里打印一行。")
+            .comment("调整协商/补齐光照方法时是否在日志里打印一行。")
             .define("logRelaxed", true);
+
+    private static final ModConfigSpec.IntValue RELIGHT_MAX_CHUNKS_PER_CALL = BUILDER
+            .comment("Paper 的 starlight$serverRelightChunks 在本服务端缺失，本模组为其提供等价实现。",
+                     "这里限制单次调用最多重光照多少个区块，防止大批量编辑造成卡顿（0 = 不限制）。",
+                     "超出部分会被跳过（属于安全阀，正常编辑很少触发）。")
+            .defineInRange("relightMaxChunksPerCall", 256, 0, 100000);
 
     public static final ModConfigSpec SPEC = BUILDER.build();
 
@@ -48,6 +54,16 @@ public final class QuietChannelsConfig {
             return LOG.get();
         } catch (Throwable t) {
             return true;
+        }
+    }
+
+    /** 单次重光照调用的区块上限；<=0 表示不限制。 */
+    public static int relightMaxChunksPerCall() {
+        try {
+            final int value = RELIGHT_MAX_CHUNKS_PER_CALL.get();
+            return value <= 0 ? Integer.MAX_VALUE : value;
+        } catch (Throwable t) {
+            return 256;
         }
     }
 }

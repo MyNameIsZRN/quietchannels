@@ -68,3 +68,18 @@ JAVA_HOME=<jdk21> gradle build      # 产物在 build/libs/quietchannels-1.0.0.j
 > ./gradlew build
 > python3 -c "import zipfile,tomllib;z=zipfile.ZipFile('build/libs/quietchannels-1.0.1.jar');tomllib.loads(z.read('META-INF/neoforge.mods.toml').decode());print('TOML OK')"
 > ```
+
+
+## 1.2.x 补充说明（实测驱动）
+
+1. **协商不能"排除"通道，只能"对齐"**：把 `axiom:*` 从协商里剔除后，NeoForge 会把服务端要发的载荷
+   降级为 `DiscardedPayload`，而 Youer 的发送路径硬转成自己的 `PluginsDiscardedPayload` →
+   `ClassCastException` → 玩家进服 7 秒后被踢。现在改为：对配置命名空间的通道，
+   * 服务端侧条目采用客户端声明的 flow/version；
+   * 两侧都标记 optional（对端缺失时自动忽略，不再报错）。
+2. **补上 Youer 缺失的 `starlight$serverRelightChunks`**：Youer 没打 Starlight 补丁，AxiomPaper
+   每 tick 调这个方法 → `NoSuchMethodError` ≈20 次/秒（实测 104k 条 / 87 分钟 / 日志 204MB）。
+   本模组用 mixin 给 `ThreadedLevelLightEngine` **补一个同签名方法**，用
+   `updateSectionStatus(section, false)` 做等价重光照（单次上限见配置 `relightMaxChunksPerCall`）。
+3. 注意：`@Shadow` 取不到**父类**字段（`LevelLightEngine.levelHeightAccessor`），
+   所以另加了 `LevelLightEngineAccessor` 接口 mixin。
