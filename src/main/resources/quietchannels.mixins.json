@@ -3,10 +3,10 @@
   "minVersion": "0.8",
   "package": "com.mctg.quietchannels.mixin",
   "compatibilityLevel": "JAVA_21",
-  "client": [
-    "NetworkComponentNegotiatorMixin"
-  ],
   "injectors": {
     "defaultRequire": 1
-  }
+  },
+  "mixins": [
+    "NetworkComponentNegotiatorMixin"
+  ]
 }
