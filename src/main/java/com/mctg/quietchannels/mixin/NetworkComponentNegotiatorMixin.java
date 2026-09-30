@@ -1,7 +1,6 @@
 package com.mctg.quietchannels.mixin;
 
 import com.mctg.quietchannels.QuietChannelsConfig;
-import net.minecraft.resources.ResourceLocation;
 import net.neoforged.neoforge.network.negotiation.NegotiableNetworkComponent;
 import net.neoforged.neoforge.network.negotiation.NegotiationResult;
 import net.neoforged.neoforge.network.negotiation.NetworkComponentNegotiator;
@@ -14,11 +13,11 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 
 import java.util.List;
 import java.util.Set;
-import java.util.stream.Collectors;
 
 /**
- * 只放宽「客户端有、服务端没有」的必需通道：把对端缺失的通道在协商列表里剔除，
- * 而不是让 NeoForge 直接断开连接。其余通道（VSS 等）保持原生协商。
+ * 在协商前，把指定命名空间的通道从**两侧**列表里整段剔除：
+ * 缺失、流(flow)不匹配、版本不匹配这三类失败因此都不会发生。
+ * 其它命名空间（VSS 等）保持 NeoForge 原生协商。
  */
 @Mixin(value = NetworkComponentNegotiator.class, remap = false)
 public class NetworkComponentNegotiatorMixin {
@@ -37,30 +36,21 @@ public class NetworkComponentNegotiatorMixin {
             return;
         }
         try {
-            final Set<ResourceLocation> serverIds = server.stream()
-                    .map(NegotiableNetworkComponent::id).collect(Collectors.toSet());
-            final Set<ResourceLocation> clientIds = client.stream()
-                    .map(NegotiableNetworkComponent::id).collect(Collectors.toSet());
-
             final List<NegotiableNetworkComponent> filteredClient = client.stream()
-                    .filter(c -> serverIds.contains(c.id()) || !namespaces.contains(c.id().getNamespace()))
+                    .filter(c -> !namespaces.contains(c.id().getNamespace()))
+                    .toList();
+            final List<NegotiableNetworkComponent> filteredServer = server.stream()
+                    .filter(c -> !namespaces.contains(c.id().getNamespace()))
                     .toList();
 
-            List<NegotiableNetworkComponent> filteredServer = server;
-            if (QuietChannelsConfig.dropMissingServerChannels()) {
-                filteredServer = server.stream()
-                        .filter(c -> clientIds.contains(c.id()) || !namespaces.contains(c.id().getNamespace()))
-                        .toList();
-            }
-
             if (filteredClient.size() == client.size() && filteredServer.size() == server.size()) {
-                return; // 没有需要放宽的通道，走原生逻辑
+                return; // 该命名空间没有任何通道，走原生逻辑
             }
 
             if (QuietChannelsConfig.logRelaxed()) {
                 quietchannels$LOG.info(
-                        "[QuietChannels] relaxing channel negotiation: client {} -> {}, server {} -> {} (namespaces {})",
-                        client.size(), filteredClient.size(), server.size(), filteredServer.size(), namespaces);
+                        "[QuietChannels] excluding namespaces {} from negotiation: client {} -> {}, server {} -> {}",
+                        namespaces, client.size(), filteredClient.size(), server.size(), filteredServer.size());
             }
 
             quietchannels$active = true;
