@@ -1,69 +1,124 @@
 package com.mctg.quietchannels;
 
-import net.neoforged.neoforge.common.ModConfigSpec;
+import net.neoforged.fml.loading.FMLPaths;
 
-import java.util.List;
+import java.io.InputStream;
+import java.io.OutputStream;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.util.HashSet;
+import java.util.Properties;
 import java.util.Set;
 
-/** 客户端配置。 */
+/**
+ * 自读配置：{@code config/quietchannels.properties}（首次运行时写入默认值）。
+ *
+ * <p>刻意不使用 NeoForge 的 {@code ModConfigSpec}：COMMON 配置在客户端会被
+ * {@code FileWatcher} 反复判定为「不正确」并重写，形成每秒一次的刷屏死循环
+ * （实测 1.2.1 客户端日志 125 行全是同一句警告）。</p>
+ *
+ * <pre>
+ * enabled = true
+ * namespaces = axiom            # 逗号分隔
+ * relightMaxChunksPerCall = 256 # 0 = 不限制
+ * logRelaxed = true
+ * </pre>
+ */
 public final class QuietChannelsConfig {
-    private static final ModConfigSpec.Builder BUILDER = new ModConfigSpec.Builder();
+    private static final String FILE_NAME = "quietchannels.properties";
 
-    private static final ModConfigSpec.BooleanValue ENABLED = BUILDER
-            .comment("总开关。关闭后完全使用 NeoForge 原生协商行为。")
-            .define("enabled", true);
-
-    private static final ModConfigSpec.ConfigValue<List<? extends String>> NAMESPACES = BUILDER
-            .comment("这些命名空间的通道会在协商前从**两侧**整段剔除（不参与协商），",
-                     "默认只放 Axiom（服务端跑 Paper 插件、客户端跑 Connector 转译的 Fabric mod 时用）。")
-            .defineList("namespaces", List.of("axiom"), o -> o instanceof String);
-
-    private static final ModConfigSpec.BooleanValue LOG = BUILDER
-            .comment("调整协商/补齐光照方法时是否在日志里打印一行。")
-            .define("logRelaxed", true);
-
-    private static final ModConfigSpec.IntValue RELIGHT_MAX_CHUNKS_PER_CALL = BUILDER
-            .comment("Paper 的 starlight$serverRelightChunks 在本服务端缺失，本模组为其提供等价实现。",
-                     "这里限制单次调用最多重光照多少个区块，防止大批量编辑造成卡顿（0 = 不限制）。",
-                     "超出部分会被跳过（属于安全阀，正常编辑很少触发）。")
-            .defineInRange("relightMaxChunksPerCall", 256, 0, 100000);
-
-    public static final ModConfigSpec SPEC = BUILDER.build();
+    private static volatile boolean loaded = false;
+    private static boolean enabled = true;
+    private static boolean logRelaxed = true;
+    private static int relightMaxChunksPerCall = 256;
+    private static Set<String> namespaces = Set.of("axiom");
 
     private QuietChannelsConfig() {
     }
 
-    public static boolean enabled() {
+    private static synchronized void ensureLoaded() {
+        if (loaded) {
+            return;
+        }
+        loaded = true;
+        final Path path = FMLPaths.CONFIGDIR.get().resolve(FILE_NAME);
+        final Properties props = new Properties();
+        boolean writeDefaults = false;
         try {
-            return ENABLED.get();
-        } catch (Throwable t) {
-            return true;
+            if (Files.exists(path)) {
+                try (InputStream in = Files.newInputStream(path)) {
+                    props.load(in);
+                }
+            } else {
+                writeDefaults = true;
+            }
+            enabled = Boolean.parseBoolean(props.getProperty("enabled", "true").trim());
+            logRelaxed = Boolean.parseBoolean(props.getProperty("logRelaxed", "true").trim());
+            relightMaxChunksPerCall = readInt(props.getProperty("relightMaxChunksPerCall", "256"), 256);
+            namespaces = parseNamespaces(props.getProperty("namespaces", "axiom"));
+            if (writeDefaults) {
+                writeDefaults(path);
+            }
+        } catch (Throwable ignored) {
+            // 读失败就保持默认值，不影响连接
         }
     }
 
-    public static Set<String> namespaces() {
+    private static int readInt(String raw, int fallback) {
         try {
-            return Set.copyOf(NAMESPACES.get());
+            return Integer.parseInt(raw.trim());
         } catch (Throwable t) {
-            return Set.of("axiom");
+            return fallback;
         }
+    }
+
+    private static Set<String> parseNamespaces(String raw) {
+        final Set<String> set = new HashSet<>();
+        for (String part : raw.split(",")) {
+            final String trimmed = part.trim();
+            if (!trimmed.isEmpty()) {
+                set.add(trimmed);
+            }
+        }
+        return set.isEmpty() ? Set.of("axiom") : Set.copyOf(set);
+    }
+
+    private static void writeDefaults(Path path) {
+        try {
+            if (path.getParent() != null) {
+                Files.createDirectories(path.getParent());
+            }
+            final Properties out = new Properties();
+            out.setProperty("enabled", String.valueOf(enabled));
+            out.setProperty("namespaces", String.join(",", namespaces));
+            out.setProperty("relightMaxChunksPerCall", String.valueOf(relightMaxChunksPerCall));
+            out.setProperty("logRelaxed", String.valueOf(logRelaxed));
+            try (OutputStream os = Files.newOutputStream(path)) {
+                out.store(os, "quietchannels: 通道协商对齐的命名空间 / 重光照上限（改完重启生效）");
+            }
+        } catch (Throwable ignored) {
+            // 写不进去也无所谓
+        }
+    }
+
+    public static boolean enabled() {
+        ensureLoaded();
+        return enabled;
     }
 
     public static boolean logRelaxed() {
-        try {
-            return LOG.get();
-        } catch (Throwable t) {
-            return true;
-        }
+        ensureLoaded();
+        return logRelaxed;
     }
 
-    /** 单次重光照调用的区块上限；<=0 表示不限制。 */
+    public static Set<String> namespaces() {
+        ensureLoaded();
+        return namespaces;
+    }
+
+    /** 单次重光照调用的区块上限；{@code <= 0} 表示不限制。 */
     public static int relightMaxChunksPerCall() {
-        try {
-            final int value = RELIGHT_MAX_CHUNKS_PER_CALL.get();
-            return value <= 0 ? Integer.MAX_VALUE : value;
-        } catch (Throwable t) {
-            return 256;
-        }
+        ensureLoaded();
+        return relightMaxChunksPerCall <= 0 ? Integer.MAX_VALUE : relightMaxChunksPerCall;
     }
 }

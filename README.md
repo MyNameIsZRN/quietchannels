@@ -83,3 +83,19 @@ JAVA_HOME=<jdk21> gradle build      # 产物在 build/libs/quietchannels-1.0.0.j
    `updateSectionStatus(section, false)` 做等价重光照（单次上限见配置 `relightMaxChunksPerCall`）。
 3. 注意：`@Shadow` 取不到**父类**字段（`LevelLightEngine.levelHeightAccessor`），
    所以另加了 `LevelLightEngineAccessor` 接口 mixin。
+
+
+## 1.2.2（配置系统切换）
+
+COMMON 配置会让客户端 `FileWatcher` 反复判定 `quietchannels-common.toml`「不正确→修正」，
+形成**每秒一次**的写文件 + 刷屏死循环（实测客户端日志 125 行全是该警告）。
+1.2.2 起**不再使用 NeoForge 的 config 系统**，改为自读 `config/quietchannels.properties`：
+
+```properties
+enabled = true
+namespaces = axiom
+relightMaxChunksPerCall = 256
+logRelaxed = true
+```
+
+客户端升级后请手动删除旧的 `config/quietchannels-common.toml`（它已无人管理，留着只是碍事）。
