@@ -119,3 +119,17 @@ validateComponent(left, right, side):
 单侧独有的条目仅标 optional 交给 NeoForge 丢弃。规则对称，与调用点参数顺序无关。
 
 离线验证（复刻协商算法）：归一化后协商成功、VSS 等通道保留、反序同样成功。
+
+
+## 1.3.0（修 Youer 载荷编码类型不匹配，插件路线的最后一块）
+
+反编译证据链：
+- Youer 把 `DiscardedPayload` 改造成「实现 `PluginsPayload`、带 `data` 字段」，并加了 2 参构造器；
+- AxiomPaper 用 Paper 风格 API 直接 `new ClientboundCustomPayloadPacket(DiscardedPayload)`（`VersionHelper` 反射找 2 参构造器）；
+- 但 Youer 给插件通道注册的 codec 是 `PluginsPayload.codec(...)`，其泛型定型为 `PluginsDiscardedPayload`（编译期插入 `checkcast`）；
+- → 编码时 `ClassCastException: DiscardedPayload cannot be cast to PluginsDiscardedPayload`
+  → `EncoderException` → 玩家进服数秒后被踢。
+
+修法：mixin `CustomPacketPayload$1#writeCap`（**仅服务端**，注册在 mixins.json 的 `server` 列表），
+遇到 `DiscardedPayload` 时按 Youer `PluginsPayload.dcodec` 语义直接写 `id + 原始字节`，
+数据用反射取（`data()` / `getData()` / 字段 `data`），绕开那个定型错误的 codec。

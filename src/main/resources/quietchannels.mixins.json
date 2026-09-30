@@ -10,5 +10,8 @@
     "LevelLightEngineAccessor",
     "NetworkComponentNegotiatorMixin",
     "ThreadedLevelLightEngineMixin"
+  ],
+  "server": [
+    "CustomPacketPayloadCodecMixin"
   ]
 }
