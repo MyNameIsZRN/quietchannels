@@ -99,3 +99,23 @@ logRelaxed = true
 ```
 
 客户端升级后请手动删除旧的 `config/quietchannels-common.toml`（它已无人管理，留着只是碍事）。
+
+
+## 1.2.3（修正归一化规则）
+
+反编译 `neoforge-21.1.251-universal.jar` 得到真实校验规则后修正：
+
+```java
+validateComponent(left, right, side):
+  if (left.flow 有 && right.flow 无) -> flow.<side>.missing
+  if (left.flow 有 && right.flow 有 && 不同) -> flow.<side>.mismatch
+  if (!fix(left.version, right.version)) -> version.mismatch
+```
+
+实测失败是 `flow.client.missing`：**服务端**（Youer 桥接 AxiomPaper 的 Bukkit 通道）声明了 flow，
+**客户端**（Connector 转译的 Axiom mod）没有。1.2.2 的规则只在"客户端有 flow"时才采用，
+客户端没有 flow 时保留了服务端的 → 仍然失败。1.2.3 改为**对称归一化**：
+命中命名空间且两侧同 id 的条目统一写成 `(id, "quietchannels", 空 flow, optional)`；
+单侧独有的条目仅标 optional 交给 NeoForge 丢弃。规则对称，与调用点参数顺序无关。
+
+离线验证（复刻协商算法）：归一化后协商成功、VSS 等通道保留、反序同样成功。
