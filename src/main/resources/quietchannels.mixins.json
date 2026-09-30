@@ -12,6 +12,8 @@
     "ThreadedLevelLightEngineMixin"
   ],
   "server": [
-    "CustomPacketPayloadCodecMixin"
+    "ChunkAccessPosMixin",
+    "CustomPacketPayloadCodecMixin",
+    "LevelChunkFieldsMixin"
   ]
 }

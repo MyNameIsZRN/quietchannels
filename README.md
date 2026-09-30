@@ -133,3 +133,14 @@ validateComponent(left, right, side):
 修法：mixin `CustomPacketPayload$1#writeCap`（**仅服务端**，注册在 mixins.json 的 `server` 列表），
 遇到 `DiscardedPayload` 时按 Youer `PluginsPayload.dcodec` 语义直接写 `id + 原始字节`，
 数据用反射取（`data()` / `getData()` / 字段 `data`），绕开那个定型错误的 codec。
+
+
+## 1.4.0（补 Paper 的 LevelChunk.locX/locZ 字段）
+
+AxiomPaper 的字节码里直接 `getfield net/minecraft/world/level/chunk/LevelChunk.locX:I`（还有 locZ）——
+这两个 `public int` 字段是 **Paper 区块系统重写**加上的，而 Youer 的补丁集里没有，于是第一次处理方块改动时就报
+`Class net.minecraft.world.level.chunk.LevelChunk does not have member field 'int locX'` 并把玩家踢掉。
+
+1.4.0 用 mixin 在 `LevelChunk` 上补出这两个字段（名字必须与 Paper 一致），并在 `ChunkAccess`
+构造器尾部按区块坐标写入值。JVM 解析字段引用会沿继承链查找，因此插件那条 `getfield` 即可解析成功。
+仅服务端生效。
